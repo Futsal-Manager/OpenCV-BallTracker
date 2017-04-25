@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 위 코드로 한글주석 처리가
+# 위 코드로 한글주석 처리가 가능해짐
 # USAGE
 # python ball_tracking.py --video ball_tracking_example.mp4
 # python ball_tracking.py
@@ -48,12 +48,14 @@ while True:
     # 2. blur it
 	blurred = cv2.GaussianBlur(frame, (11, 11), 0)
 
+	## Todo: Sharp를 넣으면 good!
+
     # 3. and convert it to the HSV color space
 	hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
 	# 'color'을 위한 마스크를 설정하고 실행
     # 마스크에 남아있는 얼룩을 일련의 팽창(dilations) and 부식(erosions)을 통해 없앰
-	mask = cv2.inRange(hsv, orangeLower, orangeUpper)
+	mask = cv2.inRange(hsv, orangeLower, orangeUpper) ## Todo: 찾은 색상코드를 opencv 원 주위에 넣기
 	mask = cv2.erode(mask, None, iterations=2)
 	mask = cv2.dilate(mask, None, iterations=2)
 
