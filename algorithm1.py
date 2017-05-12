@@ -70,7 +70,7 @@ while(1):
     # 'set/IMG_0649.jpg'
     # 'set/IMG_0652.jpg'
     # 'set/IMG_0652.jpg'
-    imgPath = 'set/IMG_0638.jpg'
+    imgPath = 'set/IMG_0649.jpg'
 
     original = cv2.imread(imgPath, 1)
     original = cv2.resize(original, (X_DIMENSION, Y_DIMENSION))

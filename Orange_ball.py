@@ -24,6 +24,7 @@ args = vars(ap.parse_args())
 orangeLower = (0, 150, 150)
 orangeUpper = (25, 255, 255)
 pts = deque(maxlen=args["buffer"])
+prevCenter = None
 
 # 비디오가 제공되지 않으면, 영상을 캡쳐
 if not args.get("video", False):
@@ -84,6 +85,15 @@ while True:
 
 	# 포인트 큐를 업데이트
 	pts.appendleft(center)
+
+	if center is not None and prevCenter is not None:
+		if prevCenter[0] - center[0] > 0:
+			print '오른쪽', prevCenter[0] - center[0]
+		elif center is not None:
+			print '왼쪽', center[0] - prevCenter[0]
+
+	prevCenter = center
+
 
     # Todo: 이부분에 else if 문으로 외곽(contours)가 여러개일때의 처리가 필요함
 

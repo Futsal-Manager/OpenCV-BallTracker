@@ -2,6 +2,8 @@
 
 import numpy as np
 import cv2
+from collections import deque
+
 # print cv2.__version__
 
 # Algorithm
@@ -46,6 +48,9 @@ cv2.namedWindow('result')
 # create trackbars for color change
 cv2.createTrackbar('BALL_ERROR_RANGE','result',BALL_ERROR_RANGE,10,nothing)
 cv2.createTrackbar('GOAL_POST_RANGE','result',GOAL_POST_RANGE,70,nothing)
+
+# Data Structure
+pts = deque(maxlen=64)
 
 # Color Variable
 '''
@@ -114,6 +119,7 @@ def findBallColor(lower, upper):
         # print 'ball founded'
         cv2.circle(img, (int(x), int(y)), int(radius), (0, 0, 0), 2)
         ballCenter = list(center)
+        _drawBallTrackLine(center) # 볼의 선을 그려서 경로 알아봄
         npBallCenter = np.array(ballCenter)
         emptyCenter = np.array([])
         # print 'founded ball center 2D: ' + str(npBallCenter)
@@ -165,6 +171,24 @@ def _setBallSize(size):
     print 'setted', size
     global BALL_SIZE
     BALL_SIZE = size
+
+
+def _drawBallTrackLine(center):
+    # 포인트 큐를 업데이트
+    pts.appendleft(center)
+
+    # Todo: 이부분에 else if 문으로 외곽(contours)가 여러개일때의 처리가 필요함
+
+    # 추적좌표들의 집합을 반복
+    for i in xrange(1, len(pts)):
+        # 추적지점이 하나도 없으면 loop 무시
+        if pts[i - 1] is None or pts[i] is None:
+            continue
+
+        # 추적지점이 있으면 두께를 계산해서 그림
+        # 연결된 선을 그림
+        thickness = int(np.sqrt(64 / float(i + 1)) * 2.5)
+        cv2.line(img, pts[i - 1], pts[i], (0, 0, 255), thickness)
 
 # 공이 중심을 찾고, 공이 들어왔는지 검사
 
