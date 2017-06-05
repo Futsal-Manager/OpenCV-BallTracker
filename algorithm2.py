@@ -24,13 +24,16 @@ from collections import deque
 # Todo 5: 골인시 알고리즘 만들기(공이 크기가 어느정도 수준일때 (ex 지름이 10px~ 15px)이고 골대의 박스안에 들어갈때 => 어느정도의 속도 => 영상의 잘리는 범위 => 소리 크기???)
 # Todo 6: 영상에 적용
 
+## Todo: After Field Test
+## Todo: 클릭해서 색 검출
+
 centerArr = []
 
 def nothing(x):
     pass
 
 # Variable
-X_DIMENSION = 640
+X_DIMENSION = 480
 Y_DIMENSION = 480
 GAUSIAN_BLUR_SIZE = 11
 CANNY_MIN_THRESH_HOLD = 100
@@ -41,6 +44,8 @@ BALL_MIN_RADIUS = BALL_SIZE - BALL_ERROR_RANGE
 BALL_MAX_RADIUS = BALL_SIZE + BALL_ERROR_RANGE
 GOAL_POST_RANGE = 30 # Todo: Need to Scroll
 BALL_POST_RATIO = 0.07
+mouseX = 0
+mouseY = 0
 
 # Make Window
 cv2.namedWindow('result')
@@ -105,34 +110,50 @@ def hsvInverter(color):
 
 
 def findGoalPostSpotColor(lower, upper):
-    (mask, cnts, c, ((x, y), radius), center) = _findSpot(lower, upper)
-    centerArr.append(center)
-    if len(centerArr) == 4:  # 만약 4개의 점을 모두 검출하면 정렬,
-        _makeLine(centerArr)
-        # 공을 추적하는 로직 Orange_ball.py를 불러다 쓸 것.
+    findSpotResult = _findSpot(lower, upper)
+    if(findSpotResult != None):
+        (mask, cnts, c, ((x, y), radius), center) = findSpotResult
+        centerArr.append(center)
+        if len(centerArr) == 4:  # 만약 4개의 점을 모두 검출하면 정렬,
+            _makeLine(centerArr)
+            # 공을 추적하는 로직 Orange_ball.py를 불러다 쓸 것.
 
 def findBallColor(lower, upper):
-    (mask, cnts, c, ((x, y), radius), center) = _findSpot(lower, upper)
-    print str(BALL_MIN_RADIUS) + ' ~ ' + str(BALL_MAX_RADIUS)
+    findSpotResult = _findSpot(lower, upper)
+    print 'findSpotResult,', findSpotResult
+    if(findSpotResult != None):
+        (mask, cnts, c, ((x, y), radius), center) = _findSpot(lower, upper)
+        print str(BALL_MIN_RADIUS) + ' ~ ' + str(BALL_MAX_RADIUS)
 
-    if BALL_MIN_RADIUS < radius and radius < BALL_MAX_RADIUS:
-        # print 'ball founded'
-        cv2.circle(img, (int(x), int(y)), int(radius), (0, 0, 0), 2)
-        ballCenter = list(center)
-        _drawBallTrackLine(center) # 볼의 선을 그려서 경로 알아봄
-        npBallCenter = np.array(ballCenter)
-        emptyCenter = np.array([])
-        # print 'founded ball center 2D: ' + str(npBallCenter)
-    return radius
+        if BALL_MIN_RADIUS < radius and radius < BALL_MAX_RADIUS:
+            # print 'ball founded'
+            cv2.circle(img, (int(x), int(y)), int(radius), (0, 0, 0), 2)
+            ballCenter = list(center)
+            _drawBallTrackLine(center) # 볼의 선을 그려서 경로 알아봄
+            npBallCenter = np.array(ballCenter)
+            emptyCenter = np.array([])
+            # print 'founded ball center 2D: ' + str(npBallCenter)
+        return radius
 
 def _findSpot(lower, upper):
+    if(lower == (210, 68.9, 69.4)): print hsvConverter(lower), hsvConverter(upper) # Blue일때
     mask = cv2.inRange(hsv, hsvConverter(lower), hsvConverter(upper))  ## Todo: 찾은 색상코드를 opencv 원 주위에 넣기
+    cv2.imshow('mask' + str(lower) + str(upper), mask)
     cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
-    c = max(cnts, key=cv2.contourArea)
-    ((x, y), radius) = cv2.minEnclosingCircle(c)
-    M = cv2.moments(c)
-    center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-    return (mask, cnts, c, ((x, y), radius), center)
+    if cnts:
+        c = max(cnts, key=cv2.contourArea)
+        ((x, y), radius) = cv2.minEnclosingCircle(c)
+        M = cv2.moments(c)
+        center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+        return (mask, cnts, c, ((x, y), radius), center)
+    else: return None
+
+
+def draw_circle(event,x,y,flags,param):
+    if event == cv2.EVENT_LBUTTONUP:
+        copyImg = img.copy()
+        height, width, channels = img.shape
+        print '클릭한 좌표: ',x, y,'색상: ', copyImg[y, x]
 
 def _makeLine(arr): # arr의 length는 항상 4
     arr.sort()
@@ -192,26 +213,28 @@ def _drawBallTrackLine(center):
 
 # 공이 중심을 찾고, 공이 들어왔는지 검사
 
-# 좌상 (파랑) (217, 100, 91.8)
-blueLower = (210, 90, 90)
-blueUpper = (230, 110, 110)
 
-# 우상 (빨강) (0, 100, 100)
-redLower = (0, 90, 90)
-redUpper = (0, 100, 100)
+## HSV
+# 좌상 (파랑) 177  78  59
+blueLower = (200, 50, 50)
+blueUpper = (230, 70, 75)
 
-# 좌하 (노랑) (59, 99.2, 97.3)
-yellowLower = (54, 94.2, 92.3)
-yellowUpper = (64, 100, 100)
+# 우상 (빨강) V
+redLower = (350, 60, 90)
+redUpper = (360, 70, 100)
 
-# 우하 (보라) (312, 84.7, 87,1)
-purpleLower = (307, 79.7, 82,1)
-purpleUpper = (317, 100, 100)
+# 좌하 (하늘) V
+skyLower = (170, 60, 80)
+skyUpper = (230, 80, 90)
+
+# 우하 (보라) 301, 58.9, 59.2
+purpleLower = (290, 45, 55)
+purpleUpper = (320, 65, 75)
 
 # 공 (주황)
 # 20, 74.9, 95.3
-orangeLower = (15, 69.9, 90)
-orangeUpper = (25, 79.9, 100)
+orangeLower = (0, 85, 0)
+orangeUpper = (45, 110, 255)
 
 ##################################################
 ############### Main Function ####################
@@ -223,6 +246,8 @@ while(1):
     if k == 27:
         # cv2.waitKey(1)
         break
+    elif k == ord('a'):
+        print mouseX,mouseY
 
     # get current positions of four trackbars
     BALL_ERROR_RANGE = cv2.getTrackbarPos('BALL_ERROR_RANGE', 'result')
@@ -233,8 +258,8 @@ while(1):
     # print 'GOAL_POST_RANGE: ' + str(GOAL_POST_RANGE)
 
     # 1. Image 읽기
-    imgPath = 'sample.jpg'
-    imgPath = 'ball_fieldsample.jpg' # ball_fieldsample.jpg
+    # imgPath = 'test.png'
+    imgPath = 'test.png' # ball_fieldsample.jpg
     img = cv2.imread(imgPath, 1)
 
     # 2. 이미지 리사이즈
@@ -267,8 +292,8 @@ while(1):
     # 파랑을 위한 mask
     findGoalPostSpotColor(blueLower, blueUpper)
 
-    # 노랑을 위한 mask
-    findGoalPostSpotColor(yellowLower, yellowUpper)
+    # 하늘을 위한 mask
+    findGoalPostSpotColor(skyLower, skyUpper)
 
     # 보라을 위한 mask
     findGoalPostSpotColor(purpleLower, purpleUpper)
@@ -284,7 +309,9 @@ while(1):
     cv2.putText(img, '0.07 convert: ' + str(BALL_SIZE), (0, 430), cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
 
     # 'BALL_SIZE'
+    cv2.setMouseCallback('result', draw_circle)
     cv2.imshow('result', img)
+
 
 
     # cv2.imshow('origin', originImg)

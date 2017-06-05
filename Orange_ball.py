@@ -86,11 +86,15 @@ while True:
 	# 포인트 큐를 업데이트
 	pts.appendleft(center)
 
+	# To find pixels/mm = Object size in pixels / object size in mm
+	# (pixels/frame) / (pixels/mm) = mm/frame
+	# mm/frame * frames/second = mm / second
+
 	if center is not None and prevCenter is not None:
 		if prevCenter[0] - center[0] > 0:
-			print '오른쪽', prevCenter[0] - center[0]
+			print '오른쪽 속력: ', prevCenter[0] - center[0]
 		elif center is not None:
-			print '왼쪽', center[0] - prevCenter[0]
+			print '왼쪽 속력 ', center[0] - prevCenter[0]
 
 	prevCenter = center
 
