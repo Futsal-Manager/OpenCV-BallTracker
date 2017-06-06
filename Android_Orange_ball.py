@@ -5,11 +5,11 @@
 # python ball_tracking.py
 
 # import the necessary packages
-from collections import deque
-import numpy as np
 import argparse
-import imutils
+from collections import deque
+
 import cv2
+import numpy as np
 
 # Argument Parser
 ap = argparse.ArgumentParser()
@@ -23,6 +23,8 @@ args = vars(ap.parse_args())
 # Todo: 공의 색깔을 미리 입력하거나 탐색하는 과정이 사전에 필요함.
 orangeLower = (0, 150, 150)
 orangeUpper = (25, 255, 255)
+ballDetectCutlineY = 240
+
 pts = deque(maxlen=args["buffer"])
 
 frame = cv2.imread("sample/OrangeObjects.jpg")
@@ -50,17 +52,23 @@ if len(cnts) > 0:
     # 2. 가장 원의 최소를 둘러싸는 원을 찾고(노란 외곽선)
     # 3. 중심에 둔다
     c = max(cnts, key=cv2.contourArea)
-    ((x, y), radius) = cv2.minEnclosingCircle(c)
-    M = cv2.moments(c)
-    center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+    cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
+    for c in cnts:
 
-    # 최소 반지름 이상일때만 진행
-    if radius > 10: ## Todo: 상수로 선언이 필요함, 최소 반지름
-        # 노란 외곽선을 그리고 중심점 표시
-        # 추적할 좌표를 업데이트
-        cv2.circle(frame, (int(x), int(y)), int(radius),
-                   (0, 255, 255), 2)
-        cv2.circle(frame, center, 5, (0, 0, 255), -1)
+        # print c
+        ((x, y), radius) = cv2.minEnclosingCircle(c)
+        M = cv2.moments(c)
+        center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+
+        print center
+
+        # 최소 반지름 이상일때만 진행
+        if radius > 7 and radius < 60 and y >= ballDetectCutlineY: ## Todo: 상수로 선언이 필요함, 최소 반지름
+            # 노란 외곽선을 그리고 중심점 표시
+            # 추적할 좌표를 업데이트
+            cv2.circle(frame, (int(x), int(y)), int(radius),
+                       (0, 255, 255), 2)
+            cv2.circle(frame, center, 5, (0, 0, 255), -1)
 
 # 포인트 큐를 업데이트
 pts.appendleft(center)
