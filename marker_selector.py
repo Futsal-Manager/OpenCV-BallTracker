@@ -310,7 +310,7 @@ while(1):
 
     # 'BALL_SIZE'
     cv2.setMouseCallback('result', draw_circle)
-    cv2.imshow('result', img)
+    # cv2.imshow('result', img)
 
 
 
