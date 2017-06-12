@@ -313,11 +313,7 @@ while(cap.isOpened()):
     # print 'GOAL_POST_RANGE: ' + str(GOAL_POST_RANGE)
 
     # 1. Frame 읽기
-    ret, img = cap.read()
-
-    # print 'X: ', X_DIMENSION, 'Y: ', Y_DIMENSION
-    # height, width, channels = img.shape
-    # print 'width X height: ', str(width) + ' X ' +str(height)
+    # ret, img = cap.read()
 
 
     if img is not None:
