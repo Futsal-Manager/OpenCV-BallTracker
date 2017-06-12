@@ -1,7 +1,11 @@
 #-*- coding: utf-8 -*-
 
+## TODO: Slider로 HSV Mask Filter 만들기
+## Todo: Y좌표값 Thresh hold 만들기
+
 import numpy as np
 import cv2
+import colorsys
 from collections import deque
 
 # print cv2.__version__
@@ -33,12 +37,12 @@ def nothing(x):
     pass
 
 # Variable
-X_DIMENSION = 480
-Y_DIMENSION = 480
+X_DIMENSION = 1280
+Y_DIMENSION = 720
 GAUSIAN_BLUR_SIZE = 11
 CANNY_MIN_THRESH_HOLD = 100
 CANNY_MAX_THRESH_HOLD = 200
-BALL_SIZE = 10 # Todo: 공의 크기가 골대에 의해 계산되도록 재정의 (공식: 골대 가로길이 * 0.07)
+BALL_SIZE = 15 # Todo: 공의 크기가 골대에 의해 계산되도록 재정의 (공식: 골대 가로길이 * 0.07)
 BALL_ERROR_RANGE = 5 # Todo: Need to Scroll
 BALL_MIN_RADIUS = BALL_SIZE - BALL_ERROR_RANGE
 BALL_MAX_RADIUS = BALL_SIZE + BALL_ERROR_RANGE
@@ -46,6 +50,9 @@ GOAL_POST_RANGE = 30 # Todo: Need to Scroll
 BALL_POST_RATIO = 0.07
 mouseX = 0
 mouseY = 0
+originImg = None
+Y_POS_THRESH_HOLD = 200
+prevCenter = None
 
 # Make Window
 cv2.namedWindow('result')
@@ -96,12 +103,14 @@ Value: 0 ~ 255
 BLACK = (0, 0, 0)
 
 
+# (180, 255, 255)이 최대: openCV 색공간
 def hsvConverter(color):
     h = float(color[0]) / 2
     s = float(color[1]) / 100 * 255
     v = float(color[2]) / 100 * 255
     return (h, s, v)
 
+# (360, 100, 100)이 최대: 원래 HSV
 def hsvInverter(color):
     h = float(color[0]) * 2
     s = float(color[1]) / 255 * 100
@@ -114,16 +123,16 @@ def findGoalPostSpotColor(lower, upper):
     if(findSpotResult != None):
         (mask, cnts, c, ((x, y), radius), center) = findSpotResult
         centerArr.append(center)
+        # print 'y is: ', center
         if len(centerArr) == 4:  # 만약 4개의 점을 모두 검출하면 정렬,
             _makeLine(centerArr)
             # 공을 추적하는 로직 Orange_ball.py를 불러다 쓸 것.
 
 def findBallColor(lower, upper):
     findSpotResult = _findSpot(lower, upper)
-    print 'findSpotResult,', findSpotResult
-    if(findSpotResult != None):
+    if(findSpotResult is not None):
         (mask, cnts, c, ((x, y), radius), center) = _findSpot(lower, upper)
-        print str(BALL_MIN_RADIUS) + ' ~ ' + str(BALL_MAX_RADIUS)
+        print 'ball size: ' +str(BALL_MIN_RADIUS) + ' ~ ' + str(BALL_MAX_RADIUS)
 
         if BALL_MIN_RADIUS < radius and radius < BALL_MAX_RADIUS:
             # print 'ball founded'
@@ -138,22 +147,43 @@ def findBallColor(lower, upper):
 def _findSpot(lower, upper):
     if(lower == (210, 68.9, 69.4)): print hsvConverter(lower), hsvConverter(upper) # Blue일때
     mask = cv2.inRange(hsv, hsvConverter(lower), hsvConverter(upper))  ## Todo: 찾은 색상코드를 opencv 원 주위에 넣기
-    cv2.imshow('mask' + str(lower) + str(upper), mask)
+    # cv2.imshow('mask' + str(lower) + str(upper), mask)
     cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
-    if cnts:
+    if cnts: # Todo: Need to refactor
         c = max(cnts, key=cv2.contourArea)
+        # print( 'contour', 'lower',lower, 'upper', upper,cnts[0][0][0][0])
         ((x, y), radius) = cv2.minEnclosingCircle(c)
         M = cv2.moments(c)
-        center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-        return (mask, cnts, c, ((x, y), radius), center)
+        if M["m00"] != 0 and M["m00"] != 0:
+            center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+            return (mask, cnts, c, ((x, y), radius), center)
+        else: return None
     else: return None
 
 
-def draw_circle(event,x,y,flags,param):
-    if event == cv2.EVENT_LBUTTONUP:
-        copyImg = img.copy()
+def show_color(event,x,y,flags,param):
+    if event == cv2.EVENT_LBUTTONUP and img is not None:
+        copyImg = originImg.copy()
         height, width, channels = img.shape
-        print '클릭한 좌표: ',x, y,'색상: ', copyImg[y, x]
+
+        point = copyImg[y, x] # (192, 192, 192)
+        r = float(point[2])/255
+        g = float(point[1])/255
+        b = float(point[0])/255
+
+        opencv_hsv = colorsys.rgb_to_hsv(r, g, b)
+        opencv_h = opencv_hsv[0] * 360
+
+        opencv_s = opencv_hsv[1] * 100
+        opencv_v = opencv_hsv[2] * 100
+
+        # print '======================'
+        # print 'original: ', opencv_hsv
+        print '색상: hsv: ', [opencv_h, opencv_s, opencv_v]
+        print '클릭한 좌표: ',x, y
+        # print 'RGB: ', [point[2], point[1], point[0]]
+        # print '======================'
+
 
 def _makeLine(arr): # arr의 length는 항상 4
     arr.sort()
@@ -182,21 +212,36 @@ def _makeLine(arr): # arr의 length는 항상 4
     rightCneter[1] = (rightCneter[1][0] + GOAL_POST_RANGE, rightCneter[1][1] + GOAL_POST_RANGE)
 
 
-
-    cv2.line(img, leftCenter[0], leftCenter[1], (0,0,0), 3) # 좌상 좌하 잇고
-    cv2.line(img, leftCenter[0], rightCneter[0], (0, 0, 0), 3) # 좌상 우상 잇고
-    cv2.line(img, rightCneter[0], rightCneter[1], (0, 0, 0), 3) # 우상 우하 잇고
-    cv2.line(img, leftCenter[1], rightCneter[1], (0, 0, 0), 3) # 좌하 우하 잇고
+    if leftCenter[1] > Y_POS_THRESH_HOLD:
+        cv2.line(img, leftCenter[0], leftCenter[1], (0,0,0), 3) # 좌상 좌하 잇고
+        cv2.line(img, leftCenter[0], rightCneter[0], (0, 0, 0), 3) # 좌상 우상 잇고
+        cv2.line(img, rightCneter[0], rightCneter[1], (0, 0, 0), 3) # 우상 우하 잇고
+        cv2.line(img, leftCenter[1], rightCneter[1], (0, 0, 0), 3) # 좌하 우하 잇고
 
 def _setBallSize(size):
-    print 'setted', size
+    # print 'setted', size
     global BALL_SIZE
     BALL_SIZE = size
 
 
 def _drawBallTrackLine(center):
+    global prevCenter
     # 포인트 큐를 업데이트
     pts.appendleft(center)
+
+    # 공의 속도를 추적
+    # To find pixels/mm = Object size in pixels / object size in mm
+    # (pixels/frame) / (pixels/mm) = mm/frame
+    # mm/frame * frames/second = mm / second
+
+    # Todo: Need To Refactor
+    if center is not None and prevCenter is not None:
+        if prevCenter[0] - center[0] > 0:
+            print '왼쪽 속력 ', prevCenter[0] - center[0]
+        elif center is not None:
+            print '오른쪽 속력: ', center[0] - prevCenter[0]
+
+    prevCenter = center
 
     # Todo: 이부분에 else if 문으로 외곽(contours)가 여러개일때의 처리가 필요함
 
@@ -214,18 +259,19 @@ def _drawBallTrackLine(center):
 # 공이 중심을 찾고, 공이 들어왔는지 검사
 
 
-## HSV
-# 좌상 (파랑) 177  78  59
-blueLower = (200, 50, 50)
-blueUpper = (230, 70, 75)
+## 색공간: HSV (360 100, 100)
+# 좌상 (파랑) 135  53  59
+# 7.933884297520661, 70.34883720930233, 67.45098039215686
+blueLower = (230, 50, 50)
+blueUpper = (245, 70, 60)
 
 # 우상 (빨강) V
 redLower = (350, 60, 90)
 redUpper = (360, 70, 100)
 
 # 좌하 (하늘) V
-skyLower = (170, 60, 80)
-skyUpper = (230, 80, 90)
+skyLower = (170, 50, 70)
+skyUpper = (230, 70, 80)
 
 # 우하 (보라) 301, 58.9, 59.2
 purpleLower = (290, 45, 55)
@@ -239,8 +285,17 @@ orangeUpper = (45, 110, 255)
 ##################################################
 ############### Main Function ####################
 ##################################################
+cap = cv2.VideoCapture('Futsal_Manager.mp4')
 
-while(1):
+# For Output Config
+fps = 30
+size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+fourcc = cv2.VideoWriter_fourcc(*'MPEG')  # note the lower case
+vout = cv2.VideoWriter()
+success = vout.open('Futsal_Manager_Out.mp4', fourcc, fps, size, False)
+
+
+while(cap.isOpened()):
     k = cv2.waitKey(0) & 0xFF
     centerArr = []
     if k == 27:
@@ -257,63 +312,69 @@ while(1):
     GOAL_POST_RANGE = cv2.getTrackbarPos('GOAL_POST_RANGE', 'result')
     # print 'GOAL_POST_RANGE: ' + str(GOAL_POST_RANGE)
 
+    # 1. Frame 읽기
+    # ret, img = cap.read()
+
     # 1. Image 읽기
     # imgPath = 'test.png'
-    imgPath = 'test.png' # ball_fieldsample.jpg
+    imgPath = 'futsalsta.jpeg' # ball_fieldsample.jpg
     img = cv2.imread(imgPath, 1)
 
-    # 2. 이미지 리사이즈
-    img = cv2.resize(img, (X_DIMENSION, Y_DIMENSION))
 
-    cv2.putText(img, 'Range: ' + str(BALL_MIN_RADIUS) + ' ~ ' + str(BALL_MAX_RADIUS), (0, 480), cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
+    if img is not None:
+        # print 'img size is: ', ret
+        #  2. 이미지 리사이즈
+        img = cv2.resize(img, (X_DIMENSION, Y_DIMENSION))
 
-    # 원본 이미지 복사
-    originImg = img.copy()
+        cv2.putText(img, 'Range: ' + str(BALL_MIN_RADIUS) + ' ~ ' + str(BALL_MAX_RADIUS), (0, 480),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
+        # 원본 이미지 복사
+        originImg = img.copy()
 
-    # 3. 블러처리 (노이즈 제거)
-    blur = cv2.GaussianBlur(img, (GAUSIAN_BLUR_SIZE, GAUSIAN_BLUR_SIZE), 0)
+        # 3. 블러처리 (노이즈 제거)
+        blur = cv2.GaussianBlur(img, (GAUSIAN_BLUR_SIZE, GAUSIAN_BLUR_SIZE), 0)
 
-    # mask = cv2.erode(mask, None, iterations=2)
-    # mask = cv2.dilate(mask, None, iterations=2)
+        # mask = cv2.erode(mask, None, iterations=2)
+        # mask = cv2.dilate(mask, None, iterations=2)
 
-    # 3. 색 공간 변경
-    hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
-    # cv2.imshow('image', hsv)
+        # 3. 색 공간 변경
+        hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
+        # cv2.imshow('image', hsv)
 
-    # Mask Array
-    maskArr = []
+        # Mask Array
+        maskArr = []
 
-    # Red
-    cntsArr = []
+        # Red
+        cntsArr = []
 
-    # 빨강을 위한 mask
-    findGoalPostSpotColor(redLower, redUpper)
+        # 빨강을 위한 mask
+        findGoalPostSpotColor(redLower, redUpper)
 
-    # 파랑을 위한 mask
-    findGoalPostSpotColor(blueLower, blueUpper)
+        # 파랑을 위한 mask
+        findGoalPostSpotColor(blueLower, blueUpper)
 
-    # 하늘을 위한 mask
-    findGoalPostSpotColor(skyLower, skyUpper)
+        # 하늘을 위한 mask
+        findGoalPostSpotColor(skyLower, skyUpper)
 
-    # 보라을 위한 mask
-    findGoalPostSpotColor(purpleLower, purpleUpper)
+        # 보라을 위한 mask
+        findGoalPostSpotColor(purpleLower, purpleUpper)
 
-    # 주황(공) 위한 mask
-    radius = findBallColor(orangeLower, orangeUpper)
+        # 주황(공) 위한 mask
+        radius = findBallColor(orangeLower, orangeUpper)
 
+        # 6. Canny Edge Detect
+        # cv2.drawContours(img, cnts, -1, (255, 0, 0), 3)
+        cv2.putText(img, 'real ball pixel' + str(radius), (0, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
+        # print 'BALL_SIZE is', BALL_SIZE
+        cv2.putText(img, '0.07 convert: ' + str(BALL_SIZE), (0, 430), cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
 
-    # 6. Canny Edge Detect
-    # cv2.drawContours(img, cnts, -1, (255, 0, 0), 3)
-    cv2.putText(img, 'real ball pixel' + str(radius), (0, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
-    print 'BALL_SIZE is', BALL_SIZE
-    cv2.putText(img, '0.07 convert: ' + str(BALL_SIZE), (0, 430), cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
+        # 'BALL_SIZE'
+        cv2.setMouseCallback('result', show_color)
+        cv2.imshow('result', img)
+        # vout.write(img)
+        # cv2.imshow('origin', originImg)
+    else:
+        break
 
-    # 'BALL_SIZE'
-    cv2.setMouseCallback('result', draw_circle)
-    # cv2.imshow('result', img)
-
-
-
-    # cv2.imshow('origin', originImg)
-
+cap.release()
 cv2.destroyAllWindows()
