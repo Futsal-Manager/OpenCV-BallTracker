@@ -317,7 +317,7 @@ while(cap.isOpened()):
 
     # 1. Image 읽기
     # imgPath = 'test.png'
-    imgPath = 'futsalsta.jpeg' # ball_fieldsample.jpg
+    imgPath = 'futsalsta_ball.jpg' # ball_fieldsample.jpg
     img = cv2.imread(imgPath, 1)
 
 

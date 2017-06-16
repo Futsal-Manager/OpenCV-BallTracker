@@ -53,12 +53,14 @@ Y_DIMENSION = 720
 GAUSIAN_BLUR_SIZE = 11
 CANNY_MIN_THRESH_HOLD = 100
 CANNY_MAX_THRESH_HOLD = 200
-BALL_SIZE = 15 # Todo: 공의 크기가 골대에 의해 계산되도록 재정의 (공식: 골대 x`가로길이 * 0.07)
-BALL_ERROR_RANGE = 5 # Todo: Need to Scroll
-BALL_MIN_RADIUS = BALL_SIZE - BALL_ERROR_RANGE
-BALL_MAX_RADIUS = BALL_SIZE + BALL_ERROR_RANGE
-GOAL_POST_RANGE = 0 # Todo: Need to Scroll
+BALL_SIZE = 10 # Todo: 공의 크기가 골대에 의해 계산되도록 재정의 (공식: 골대 x`가로길이 * 0.07)
+BALL_ERROR_RANGE = 20
+BALL_ERROR_SPAN = 20
+BALL_MIN_RADIUS = BALL_ERROR_RANGE
+BALL_MAX_RADIUS = BALL_ERROR_RANGE + BALL_ERROR_SPAN
+GOAL_POST_RANGE = 0
 BALL_POST_RATIO = 0.07
+
 
 # For Scren Click Event
 mouseX = 0
@@ -68,11 +70,11 @@ originImg = None
 prevCenter = None
 
 # Make Window
-cv2.namedWindow('result')
+cv2.namedWindow('frame')
 
 # create trackbars for color change
-cv2.createTrackbar('BALL_ERROR_RANGE','result',BALL_ERROR_RANGE,10,nothing)
-cv2.createTrackbar('GOAL_POST_RANGE','result',GOAL_POST_RANGE,70,nothing)
+cv2.createTrackbar('BALL_ERROR_RANGE','frame',BALL_ERROR_RANGE,50,nothing)
+cv2.createTrackbar('GOAL_POST_RANGE','frame',GOAL_POST_RANGE,70,nothing)
 
 # Data Structure deque for ball path
 pts = deque(maxlen=64)
@@ -134,7 +136,7 @@ def hsvInverter(color):
     return (h, s, v)
 
 # 골대 찾기
-def findGoalPostByColorAndDirection(yellowColor, orangeColor, direction):
+def findGoalPostByColorAndDirection(yellowColor, orangeColor):
     global frame
     # for yellow
     _yellowColorLower = yellowColor[0]
@@ -144,93 +146,119 @@ def findGoalPostByColorAndDirection(yellowColor, orangeColor, direction):
     _orangeColorLower = orangeColor[0]
     _orangeColorUpper = orangeColor[1]
 
-    findSpotResult = _findSpot(_yellowColorLower, _yellowColorUpper, direction)
+    findSpotResult = _findSpot(_yellowColorLower, _yellowColorUpper)
     if(findSpotResult != None):
-        (mask, cnts, c, ((x, y), radius), center) = findSpotResult
-        # cv2.circle(frame, center, 30, (255,0,0), 10)
-        # cv2.putText(frame, 'Yellow Center: ' +str(center), center, cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
-        cv2.imshow('mask'+direction, mask) # Just Yellow
-        yellowCenterArr.append(center)
+        ((mask, cnts, c1, ((x1, y1), radius1), center1), (mask, cnts, c2, ((x2, y2), radius2), center2)) = findSpotResult
+        cv2.circle(frame, center1, 10, (0,255,0), 10)
+        cv2.circle(frame, center2, 10, (0,255, 0), 10)
+        # cv2.putText(frame, 'Yellow Center 1: ' +str(center1), center1, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 2)
+        # cv2.putText(frame, 'Yellow Center 2: ' + str(center2), center2, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        # cv2.imshow('mask', mask) # Just Yellow
+        yellowCenterArr.append(center1)
+        yellowCenterArr.append(center2)
 
-
-    # Todo: Need to debug
-    # _yellowCenterArr[(519, 321), (560, 504)]
-    # _orangeCenterArr[(528, 320), (78, 323)]
-
-    findSpotResult = _findSpot(_orangeColorLower, _orangeColorUpper, direction)
+    findSpotResult = _findSpot(_orangeColorLower, _orangeColorUpper)
     if (findSpotResult != None):
-        (mask, cnts, c, ((x, y), radius), center) = findSpotResult
-        _center = center
-        _center = (_center[0] + X_DIMENSION/2, _center[1])
-        # cv2.putText(frame, 'Orange Center: ' + str(center), _center, cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
-        # cv2.circle(frame, _center, 30, (0, 255, 0), 10)  # Just for Orage
-        cv2.imshow('mask' + direction, mask)
-        orangeCenterArr.append(center)
+        ((mask, cnts, c1, ((x1, y1), radius1), center1), (mask, cnts, c2, ((x2, y2), radius2), center2)) = findSpotResult
+        cv2.circle(frame, center1, 20, (0, 0, 255), 10)
+        cv2.circle(frame, center2, 20, (0, 0, 255), 10)
+        # cv2.putText(frame, 'Yellow Center 1: ' +str(center1), center1, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 2)
+        # cv2.putText(frame, 'Yellow Center 2: ' + str(center2), center2, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        # cv2.imshow('mask', mask) # Just Yellow
+        orangeCenterArr.append(center1)
+        orangeCenterArr.append(center2)
+
 
     if len(yellowCenterArr) >= 2  and len(orangeCenterArr) >= 2:  # 만약 2개의 점을 모두 검출하면 정렬,
         _makeCenterBeetweenColor(yellowCenterArr, orangeCenterArr) # 골대 외곽선 그리기
 
 
 def findBallColor(lower, upper):
-    findSpotResult = _findSpot(lower, upper)
-    if(findSpotResult is not None):
-        (mask, cnts, c, ((x, y), radius), center) = _findSpot(lower, upper)
-        print 'ball size: ' +str(BALL_MIN_RADIUS) + ' ~ ' + str(BALL_MAX_RADIUS)
+    findSpotResult = _findBallColor(lower, upper)
+    if findSpotResult is not None:
+        (mask, cnts, c, ((x, y), radius), center) = findSpotResult
 
         if BALL_MIN_RADIUS < radius and radius < BALL_MAX_RADIUS:
             # print 'ball founded'
             cv2.circle(frame, (int(x), int(y)), int(radius), (0, 0, 0), 2)
             ballCenter = list(center)
-            _drawBallTrackLine(center) # 볼의 선을 그려서 경로 알아봄
+            _drawBallTrackLine(center)  # 볼의 선을 그려서 경로 알아봄
             npBallCenter = np.array(ballCenter)
             emptyCenter = np.array([])
-
-        return radius
-
-def _findSpot(lower, upper, direction):
-    hsvCopy = np.array(hsv) # copy
-
-
-    # Todo: Deep Copy화 화면을 Binary로 채우는 것에 대한 Performance문제 해결
-
-    # [
-    #   [0],[],[],
-    #   [],[],[],
-    #   [],[],[],
-    # ]
-
-    # direction 왼쪽 => 오른쪽 half만큼 가려버림
-    if direction == DIRECTION_LEFT:
-        hsvCopy = hsvCopy[0 : Y_DIMENSION, 0 : X_DIMENSION/2]
-        # for x in range(X_DIMENSION/2, X_DIMENSION):
-        #     for y in range(0, Y_DIMENSION):
-        #         maskBlack = np.uint8([0, 0, 0])
-        #         hsvCopy[y][x] = maskBlack # Todo: 왜 x,y 반대?, ref: http://docs.opencv.org/3.0-beta/doc/user_guide/ug_mat.html
-
-
-    if direction == DIRECTION_RIGHT:
-        hsvCopy = hsvCopy[0 : Y_DIMENSION, X_DIMENSION/2 : X_DIMENSION]
-        # for x in range(0, X_DIMENSION/2):
-        #     for y in range(0, Y_DIMENSION):
-        #         maskBlack = np.uint8([0, 0, 0])
-        #         hsvCopy[y][x] = maskBlack # Todo: 왜 x,y 반대?, ref: http://docs.opencv.org/3.0-beta/doc/user_guide/ug_mat.html
-
-    # cv2.imshow('test'+direction, hsvCopy)
-
-    mask = cv2.inRange(hsvCopy, hsvConverter(lower), hsvConverter(upper))
-
-    # cv2.imshow('mask ' + direction + str(lower) + str(upper), mask)
-    cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
-    if cnts:
-        c = max(cnts, key=cv2.contourArea)
-        # print( 'contour', 'lower',lower, 'upper', upper,cnts[0][0][0][0])
-        ((x, y), radius) = cv2.minEnclosingCircle(c)
-        M = cv2.moments(c)
-        if M["m00"] != 0 and M["m00"] != 0:
-            center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-            return (mask, cnts, c, ((x, y), radius), center)
+            # print 'founded ball center 2D: ' + str(npBallCenter)
+            return radius
         else: return None
     else: return None
+
+
+# Todo: Only 골대만.
+##
+def _findSpot(lower, upper):
+    hsvCopy = np.array(hsv) # copy
+    
+    # cv2.imshow('test'+direction, hsvCopy)
+    mask = cv2.inRange(hsvCopy, hsvConverter(lower), hsvConverter(upper))
+    cv2.imshow(str(lower)+' '+str(upper), mask)
+    # 컨투어 찾아내기
+    cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+    if cnts:
+        # c = max(cnts, key=cv2.contourArea) # Note: 가장 큰 오브젝트 찾음
+        sortedCnts = sorted(cnts, key=cv2.contourArea, reverse=True)
+
+        idx = 0
+        radius1 = 100
+        radius2 = 100
+        c1 = None
+        c2 = None
+
+        # radius가 너무 크면 거름. 왜냐면 마커는 그렇게 크지 않기 때문
+        # 빛도 잔디에 빛이 가해지면, 노란색일 수 있음
+        # only For Ball Post
+        while radius1 > 10 or radius2 > 10 and idx + 1 < len(sortedCnts):
+            c1 = sortedCnts[idx]  # 가장 큰 색
+            c2 = sortedCnts[idx+1]  # 두번째로 큰 색
+            ((x1, y1), radius1) = cv2.minEnclosingCircle(c1)
+            ((x2, y2), radius2) = cv2.minEnclosingCircle(c2)
+            idx += 1
+
+        if c1 is not None and c2 is not None:
+            M1 = cv2.moments(c1)
+            M2 = cv2.moments(c2)
+
+            if M1["m00"] != 0 and M1["m00"] != 0 and M2["m00"] != 0 and M2["m00"]:
+                center1 = (int(M1["m10"] / M1["m00"]), int(M1["m01"] / M1["m00"]))
+                center2 = (int(M2["m10"] / M2["m00"]), int(M2["m01"] / M2["m00"]))
+                return ((mask, cnts, c1, ((x1, y1), radius1), center1), (mask, cnts, c2, ((x2, y2), radius2), center2))
+            else: return None
+        else:
+            return None
+    else: return None
+
+def _findBallColor(lower, upper):
+    hsvCopy = np.array(hsv)  # copy
+
+    # cv2.imshow('test'+direction, hsvCopy)
+    mask = cv2.inRange(hsvCopy, hsvConverter(lower), hsvConverter(upper))
+    cv2.imshow(str(lower) + ' ' + str(upper), mask)
+
+    cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+    if cnts:
+        idx = 0
+        # c = max(cnts, key=cv2.contourArea) # Note: 가장 큰 오브젝트 찾음
+        sortedCnts = sorted(cnts, key=cv2.contourArea, reverse=True)
+        c = sortedCnts[idx]  # 가장 큰 색
+        ((x, y), radius) = cv2.minEnclosingCircle(c)
+        print 'ball founded, radius: ', radius
+
+        if c is not None:
+            cv2.moments(c)
+            M = cv2.moments(c)
+            if M["m00"] != 0 and M["m00"] != 0:
+                center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+                return (mask, cnts, c, ((x, y), radius), center)
+            else: return None
+
+
 
 
 def show_color(event,x,y,flags,param):
@@ -262,6 +290,7 @@ def show_color(event,x,y,flags,param):
 # Todo 2. 주황 사이의 거리
 # Todo 3. 최종 중심점 사이의 거리가 일정 이상
 def _makeCenterBeetweenColor(_yellowCenterArr, _orangeCenterArr): # arr의 length는 항상 4
+    print(_yellowCenterArr, _orangeCenterArr)
     # _yellowCenterArr.sort() # _yellowCenterArr [(54, 165), (386, 159)]
     # _orangeCenterArr.sort() # _orangeCenterArr [(38, 172), (403, 157)]
     # Yellow와 Orange사이의 점들중 가장 작은 값을 찾아낸다.
@@ -321,6 +350,7 @@ def _makeCenterBeetweenColor(_yellowCenterArr, _orangeCenterArr): # arr의 lengt
 
     # 골대 range 값만큼 키움
     # 좌상 x-,y-
+    print 'GOAL_POST_RANGE: ', GOAL_POST_RANGE
     leftTopCenter = (leftTopCenter[0] - GOAL_POST_RANGE, leftTopCenter[1] - GOAL_POST_RANGE)
 
     # 좌하 x-,y+
@@ -405,8 +435,8 @@ orangePostLower = (20, 68, 80)
 orangePostUpper= (40, 85, 110)
 
 # 공 (주황)
-orangeLower = (0, 85, 0)
-orangeUpper = (45, 110, 255)
+orangeLower = (0, 60, 70)
+orangeUpper = (25, 100, 120)
 
 ##################################################
 ############### Main Function ####################
@@ -425,6 +455,11 @@ if MODE == WEBCAM_MODE:
 
 # 무한루프
 while True:
+    k = cv2.waitKey(0) & 0xFF
+    centerArr = []
+    if k == 27:
+        break
+
     # Start time
     start = time.time()
     global grabbed
@@ -434,7 +469,7 @@ while True:
     if MODE == WEBCAM_MODE:
         (grabbed, frame) = camera.read()
     elif MODE == IMAGE_MODE:
-        imgPath = 'futsalsta.jpeg'  # ball_fieldsample.jpg
+        imgPath = 'futsalsta_ball.jpg'  # futsalsta1.jpeg, futsalsta2.jpeg, noise.jpeg, futsalsta_ball.jpg
         frame = cv2.imread(imgPath, 1)
     elif MODE == VIDEO_MODE:
         ret, img = cap.read()
@@ -443,10 +478,10 @@ while True:
     orangeCenterArr = []
 
     # get current positions of four trackbars
-    BALL_ERROR_RANGE = cv2.getTrackbarPos('BALL_ERROR_RANGE', 'result')
-    BALL_MIN_RADIUS = BALL_SIZE - BALL_ERROR_RANGE
-    BALL_MAX_RADIUS = BALL_SIZE + BALL_ERROR_RANGE
-    GOAL_POST_RANGE = cv2.getTrackbarPos('GOAL_POST_RANGE', 'result')
+    BALL_ERROR_RANGE = cv2.getTrackbarPos('BALL_ERROR_RANGE', 'frame')
+    BALL_MIN_RADIUS = BALL_ERROR_RANGE
+    BALL_MAX_RADIUS = BALL_ERROR_RANGE + BALL_ERROR_SPAN
+    GOAL_POST_RANGE = cv2.getTrackbarPos('GOAL_POST_RANGE', 'frame')
 
     if frame is None: # or not grabbed
         print'frame is non or not grabbed'
@@ -456,7 +491,9 @@ while True:
     # frame = imutils.resize(frame, width=X_DIMENSION, height=Y_DIMENSION)
     frame = cv2.resize(frame, (X_DIMENSION, Y_DIMENSION))
 
-    cv2.putText(frame, 'Range: ' + str(BALL_MIN_RADIUS) + ' ~ ' + str(BALL_MAX_RADIUS), (0, 480),
+    cv2.putText(frame, 'BALL_ERROR_RANGE: ' + str(BALL_ERROR_RANGE), (0, 100),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
+    cv2.putText(frame, 'Ball Range: ' + str(BALL_MIN_RADIUS) + ' ~ ' + str(BALL_MAX_RADIUS), (0, 480),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
     # 원본 이미지 복사
     originImg = frame.copy()
@@ -471,14 +508,12 @@ while True:
     # 3. 색 공간 변경
     hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
 
-    # 4. 왼쪽 마커 찾기
-    findGoalPostByColorAndDirection([yellowLower, yellowUpper], [orangePostLower, orangePostUpper],DIRECTION_LEFT)
-
-    # 5. 오른쪽 마커 찾기
-    findGoalPostByColorAndDirection([yellowLower, yellowUpper], [orangePostLower, orangePostUpper],DIRECTION_RIGHT)
+    # 4. 마커 Like한 아이들 찾기
+    # findGoalPostByColorAndDirection((yellowLower, yellowUpper), (orangePostLower, orangePostUpper))
 
     # 주황(공) 위한 mask
-    # radius = findBallColor(orangeLower, orangeUpper)
+    radius = findBallColor(orangeLower, orangeUpper)
+    # cv2.putText(frame, 'Real Ball radius: ' + str(radius), (0, 520),cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
 
     # 6. Canny Edge Detect
     # cv2.putText(frame, 'real ball pixel' + str(radius), (0, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 2)
@@ -494,11 +529,6 @@ while True:
 
     # Time elapsed
     seconds = 1 / (end - start)
-
-# Q를 누르면 프로그램 종료
-    key = cv2.waitKey(1) & 0xFF
-    if key == ord("q"):
-        break
 
 
 # 카메라 클리어
